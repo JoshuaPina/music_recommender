@@ -134,11 +134,72 @@ You can add more tests in `tests/test_recommender.py`.
 
 ## Experiments You Tried
 
-Use this section to document the experiments you ran. For example:
+I ran adversarial and edge-case user profiles to test whether the scoring logic could be tricked or produce unexpected results.
 
-- What happened when you changed the weight on genre from 2.0 to 0.5
-- What happened when you added tempo or valence to the score
-- How did your system behave for different types of users
+### 1) Case-Sensitivity Attack
+Input: genre=Pop, mood=HAPPY, energy=0.90, likes_acoustic=False
+
+Top 5:
+- Storm Runner (3.38)
+- Gym Hero (3.38)
+- Neon Bazaar (3.31)
+- Thunder Forge (3.29)
+- Midnight Groove (3.14)
+
+![Case-Sensitivity Attack](artifacts/adversarial_profiles/case-sensitivity-attack.svg)
+
+### 2) Out-of-Range Energy High
+Input: genre=pop, mood=happy, energy=2.50, likes_acoustic=False
+
+Top 5:
+- Sunrise City (7.82)
+- Gym Hero (4.95)
+- Rooftop Lights (3.65)
+- Thunder Forge (0.97)
+- Baseline Bounce (0.91)
+
+![Out-of-Range Energy High](artifacts/adversarial_profiles/out-of-range-energy-high.svg)
+
+### 3) Out-of-Range Energy Low
+Input: genre=rock, mood=intense, energy=-1.20, likes_acoustic=True
+
+Top 5:
+- Storm Runner (7.10)
+- Gym Hero (3.05)
+- Paper Lantern Waltz (0.96)
+- Spacewalk Thoughts (0.92)
+- Coffee Shop Stories (0.89)
+
+![Out-of-Range Energy Low](artifacts/adversarial_profiles/out-of-range-energy-low.svg)
+
+### 4) Unknown Labels + Numeric Only
+Input: genre=nonexistent-genre, mood=nonexistent-mood, energy=0.55, likes_acoustic=True
+
+Top 5:
+- Sunset Caravan (2.95)
+- Coffee Shop Stories (2.94)
+- Focus Flow (2.91)
+- Velvet Rain (2.90)
+- Midnight Coding (2.88)
+
+![Unknown Labels + Numeric Only](artifacts/adversarial_profiles/unknown-labels-plus-numeric-only.svg)
+
+### 5) Sparse Profile (No Genre/Mood)
+Input: energy=0.80, likes_acoustic=False
+
+Top 5:
+- Baseline Bounce (3.39)
+- Sunrise City (3.27)
+- Midnight Groove (3.25)
+- Neon Bazaar (3.16)
+- Night Drive Loop (3.16)
+
+![Sparse Profile](artifacts/adversarial_profiles/sparse-profile-no-genre-mood.svg)
+
+Key behavior observed:
+- Category matching is case-sensitive, so capitalized inputs can bypass genre/mood match boosts.
+- Out-of-range numeric preferences still run and can flatten numeric scoring.
+- Unknown or missing genre/mood values cause the model to rely mostly on energy and acousticness.
 
 ---
 

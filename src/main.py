@@ -33,13 +33,29 @@ def main() -> None:
     songs = load_songs("data/songs.csv")
     console.print(f"Loaded Songs: {len(songs)}", style="bold green")
 
-    # Starter example profile
-    user_prefs = {
-        "genre": "pop",
-        "mood": "happy",
-        "energy": 0.8,
-        "likes_acoustic": False,
+    user_profiles = {
+        "High-Energy Pop": {
+            "genre": "pop",
+            "mood": "happy",
+            "energy": 0.9,
+            "likes_acoustic": False,
+        },
+        "Chill Lofi": {
+            "genre": "lofi",
+            "mood": "chill",
+            "energy": 0.35,
+            "likes_acoustic": True,
+        },
+        "Deep Intense Rock": {
+            "genre": "rock",
+            "mood": "intense",
+            "energy": 0.92,
+            "likes_acoustic": False,
+        },
     }
+    active_profile = "High-Energy Pop"
+    user_prefs = user_profiles[active_profile]
+    console.print(f"Active profile: {active_profile}", style="bold blue")
 
     console.print("Scoring songs against your taste profile...", style="cyan")
     recommendations = recommend_songs(user_prefs, songs, k=5)

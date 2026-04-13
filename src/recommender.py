@@ -44,11 +44,9 @@ class Recommender:
     Required by tests/test_recommender.py
     """
     def __init__(self, songs: List[Song]):
-        """Store the catalog used for generating recommendations."""
         self.songs = songs
 
     def recommend(self, user: UserProfile, k: int = 5) -> List[Song]:
-        """Return the top-k songs ranked by score for the given user."""
         scored_songs = []
         user_prefs = {
             "genre": user.favorite_genre,
@@ -65,7 +63,6 @@ class Recommender:
         return [song for song, _ in scored_songs[:k]]
 
     def explain_recommendation(self, user: UserProfile, song: Song) -> str:
-        """Return a readable explanation of why a song was recommended."""
         user_prefs = {
             "genre": user.favorite_genre,
             "mood": user.favorite_mood,
@@ -76,28 +73,22 @@ class Recommender:
         return "; ".join(reasons) if reasons else "This song is a reasonable match for the user's taste profile."
 
 def _get_value(item: Any, key: str, default: Any = None) -> Any:
-    """Get a value from a dict or object attribute with a default fallback."""
     if isinstance(item, dict):
         return item.get(key, default)
     return getattr(item, key, default)
 
 
 def _clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
-    """Clamp a numeric value to the inclusive [minimum, maximum] range."""
     return max(minimum, min(maximum, value))
 
 
 def _normalized_distance_score(value: float, target: float) -> float:
-    """Convert absolute distance from target into a normalized similarity score."""
     return _clamp(1.0 - abs(value - target))
 
 
 def load_songs(csv_path: str) -> List[Dict]:
     """
-    Loads songs from a CSV file using Python's csv module.
-    Numeric fields are converted for downstream scoring:
-    - id -> int
-    - energy, tempo_bpm, valence, danceability, acousticness -> float
+    Loads songs from a CSV file.
     Required by src/main.py
     """
     songs: List[Dict[str, Any]] = []
@@ -141,28 +132,24 @@ def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
     # Strong categorical matches.
     if preferred_genre and genre == preferred_genre:
         score += GENRE_MATCH_POINTS
-        reasons.append(f"genre match (+{GENRE_MATCH_POINTS:.1f})")
+        reasons.append(f"genre matches {preferred_genre}")
 
     if preferred_mood and mood == preferred_mood:
         score += MOOD_MATCH_POINTS
-        reasons.append(f"mood match (+{MOOD_MATCH_POINTS:.1f})")
+        reasons.append(f"mood matches {preferred_mood}")
 
     # Distance-based numeric scoring rewards songs that are close to the user's target.
     energy_match = _normalized_distance_score(energy, float(target_energy))
-    energy_points = energy_match * ENERGY_MATCH_POINTS
-    score += energy_points
-    reasons.append(
-        f"energy similarity (+{energy_points:.2f}) [song={energy:.2f}, target={float(target_energy):.2f}]"
-    )
+    score += energy_match * ENERGY_MATCH_POINTS
+    reasons.append(f"energy is close to the target ({energy:.2f} vs {float(target_energy):.2f})")
 
     preferred_acousticness = 1.0 if likes_acoustic else 0.0
     acoustic_match = _normalized_distance_score(acousticness, preferred_acousticness)
-    acoustic_points = acoustic_match * ACOUSTIC_MATCH_POINTS
-    score += acoustic_points
+    score += acoustic_match * ACOUSTIC_MATCH_POINTS
     if likes_acoustic:
-        reasons.append(f"acoustic preference match (+{acoustic_points:.2f}) [prefers acoustic]")
+        reasons.append("higher acousticness fits the user's preference")
     else:
-        reasons.append(f"acoustic preference match (+{acoustic_points:.2f}) [prefers less acoustic]")
+        reasons.append("lower acousticness fits the user's preference")
 
     return score, reasons
 
@@ -171,11 +158,12 @@ def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tup
     Functional implementation of the recommendation logic.
     Required by src/main.py
     """
-    scored_songs = [
-        (song, score, "; ".join(reasons))
-        for song in songs
-        for score, reasons in [score_song(user_prefs, song)]
-    ]
+    scored_songs = []
 
-    ranked_songs = sorted(scored_songs, key=lambda item: item[1], reverse=True)
-    return ranked_songs[:k]
+    for song in songs:
+        score, reasons = score_song(user_prefs, song)
+        explanation = "; ".join(reasons)
+        scored_songs.append((song, score, explanation))
+
+    scored_songs.sort(key=lambda item: item[1], reverse=True)
+    return scored_songs[:k]
