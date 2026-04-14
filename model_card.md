@@ -1,7 +1,7 @@
-# 🎧 Model Card: VibeFinder 1.0
+# 🎧 Model Card: Chune-Boost v1.0.1
 
 ## 1. Model Name
-VibeFinder 1.0
+Chune-Boost v1.0.1
 
 ---
 
