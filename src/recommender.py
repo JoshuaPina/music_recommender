@@ -9,6 +9,11 @@ GENRE_MATCH_POINTS = 4.0
 MOOD_MATCH_POINTS = 3.0
 ENERGY_MATCH_POINTS = 2.5
 ACOUSTIC_MATCH_POINTS = 1.0
+POPULARITY_MATCH_POINTS = 1.5
+DECADE_MATCH_POINTS = 1.25
+MOOD_TAG_MATCH_POINTS = 1.75
+INSTRUMENTAL_MATCH_POINTS = 1.0
+EXPLICIT_ALIGNMENT_POINTS = 1.0
 
 @dataclass
 class Song:
@@ -26,6 +31,11 @@ class Song:
     valence: float
     danceability: float
     acousticness: float
+    popularity: int = 50
+    release_decade: int = 2000
+    mood_tags: str = ""
+    instrumentalness: float = 0.0
+    explicit_lyrics: bool = False
 
 @dataclass
 class UserProfile:
@@ -107,6 +117,11 @@ def load_songs(csv_path: str) -> List[Dict]:
                     "valence": float(row["valence"]),
                     "danceability": float(row["danceability"]),
                     "acousticness": float(row["acousticness"]),
+                    "popularity": int(row.get("popularity", 50)),
+                    "release_decade": int(row.get("release_decade", 2000)),
+                    "mood_tags": row.get("mood_tags", ""),
+                    "instrumentalness": float(row.get("instrumentalness", 0.0)),
+                    "explicit_lyrics": bool(int(row.get("explicit_lyrics", 0))),
                 }
             )
     return songs
@@ -120,11 +135,25 @@ def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
     mood = _get_value(song, "mood", "")
     energy = float(_get_value(song, "energy", 0.0) or 0.0)
     acousticness = float(_get_value(song, "acousticness", 0.0) or 0.0)
+    popularity = float(_get_value(song, "popularity", 50.0) or 50.0)
+    release_decade = int(_get_value(song, "release_decade", 2000) or 2000)
+    mood_tags = str(_get_value(song, "mood_tags", "") or "")
+    instrumentalness = float(_get_value(song, "instrumentalness", 0.0) or 0.0)
+    explicit_lyrics = bool(_get_value(song, "explicit_lyrics", False))
 
     preferred_genre = user_prefs.get("genre") or user_prefs.get("favorite_genre")
     preferred_mood = user_prefs.get("mood") or user_prefs.get("favorite_mood")
     target_energy = user_prefs.get("energy", user_prefs.get("target_energy", 0.0))
     likes_acoustic = bool(user_prefs.get("likes_acoustic", False))
+    target_popularity = float(user_prefs.get("target_popularity", 50.0))
+    preferred_decade = int(user_prefs.get("preferred_decade", release_decade))
+    likes_instrumental = bool(user_prefs.get("likes_instrumental", False))
+    preferred_tags_raw = user_prefs.get("preferred_mood_tags", [])
+    if isinstance(preferred_tags_raw, str):
+        preferred_tags = [tag.strip().lower() for tag in preferred_tags_raw.split("|") if tag.strip()]
+    else:
+        preferred_tags = [str(tag).strip().lower() for tag in preferred_tags_raw if str(tag).strip()]
+    song_tag_set = {tag.strip().lower() for tag in mood_tags.split("|") if tag.strip()}
 
     score = 0.0
     reasons: List[str] = []
@@ -150,6 +179,49 @@ def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
         reasons.append("higher acousticness fits the user's preference")
     else:
         reasons.append("lower acousticness fits the user's preference")
+
+    # Popularity similarity: normalize to [0, 1] and reward closeness.
+    popularity_match = _normalized_distance_score(popularity / 100.0, target_popularity / 100.0)
+    popularity_points = popularity_match * POPULARITY_MATCH_POINTS
+    score += popularity_points
+    reasons.append(
+        f"popularity is close to target (+{popularity_points:.2f}) [song={int(popularity)}, target={int(target_popularity)}]"
+    )
+
+    # Decade preference: full points for exact decade, smoothly reduced by distance.
+    decade_gap = abs(release_decade - preferred_decade)
+    decade_match = _clamp(1.0 - (decade_gap / 40.0))
+    decade_points = decade_match * DECADE_MATCH_POINTS
+    score += decade_points
+    reasons.append(
+        f"era alignment (+{decade_points:.2f}) [song decade={release_decade}, preferred={preferred_decade}]"
+    )
+
+    # Detailed mood-tag overlap: intersection ratio against preferred tags.
+    if preferred_tags:
+        overlap_count = len(song_tag_set.intersection(preferred_tags))
+        tag_match_ratio = overlap_count / len(preferred_tags)
+        tag_points = tag_match_ratio * MOOD_TAG_MATCH_POINTS
+        score += tag_points
+        reasons.append(
+            f"mood-tag overlap (+{tag_points:.2f}) [matched {overlap_count}/{len(preferred_tags)} tags]"
+        )
+
+    # Instrumentalness preference works like a distance-based soft target.
+    preferred_instrumentalness = 1.0 if likes_instrumental else 0.0
+    instrumental_match = _normalized_distance_score(instrumentalness, preferred_instrumentalness)
+    instrumental_points = instrumental_match * INSTRUMENTAL_MATCH_POINTS
+    score += instrumental_points
+    reasons.append(f"instrumentalness alignment (+{instrumental_points:.2f})")
+
+    # Explicit lyric preference is optional; only score when preference is provided.
+    if "avoids_explicit" in user_prefs:
+        avoids_explicit = bool(user_prefs.get("avoids_explicit", False))
+        preferred_explicitness = 0.0 if avoids_explicit else 1.0
+        explicit_match = _normalized_distance_score(float(int(explicit_lyrics)), preferred_explicitness)
+        explicit_points = explicit_match * EXPLICIT_ALIGNMENT_POINTS
+        score += explicit_points
+        reasons.append(f"explicit-content alignment (+{explicit_points:.2f})")
 
     return score, reasons
 
